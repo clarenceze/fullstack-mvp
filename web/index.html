@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Video Game Sales</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    button { padding: 10px 15px; margin-bottom: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f4f4f4; }
+  </style>
+</head>
+<body>
+  <h1>Top 10 Video Games by Sales</h1>
+  <button id="loadData">Load Data</button>
+  <table id="gamesTable" style="display: none;">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Global Sales (millions)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    document.getElementById("loadData").addEventListener("click", async () => {
+      try {
+        const response = await fetch("/api/query");
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        const data = await response.json();
+
+        const table = document.getElementById("gamesTable");
+        const tbody = table.querySelector("tbody");
+        tbody.innerHTML = "";
+
+        data.forEach(row => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${row.name}</td><td>${row.global_sales}</td>`;
+          tbody.appendChild(tr);
+        });
+
+        table.style.display = "table";
+      } catch (error) {
+        alert("Error loading data: " + error.message);
+      }
+    });
+  </script>
+</body>
+</html>

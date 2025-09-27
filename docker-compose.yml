@@ -1,0 +1,49 @@
+version: "3.9"                       # Compose 规范版本（3.9 即 v3 系列的最新一代）
+
+services:                            # 定义要运行的「服务」（每个服务对应一个或一组容器）
+
+  db:                                # 数据库服务（PostgreSQL）
+    image: postgres:16               # 使用官方 Postgres 16 镜像
+    container_name: vgs_db           # 容器名称（便于 docker ps/exec 时识别）
+    environment:                     # 传入环境变量（从同目录下 .env 里取值）
+      POSTGRES_DB: ${POSTGRES_DB}          # 初始化数据库名
+      POSTGRES_USER: ${POSTGRES_USER}      # 数据库用户名
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # 数据库密码
+    command: [
+      "postgres",                       # 启动 PostgreSQL 主进程
+      "-c","shared_buffers=128MB",      # PG 用于缓存数据页的内存（默认更大，小内存机器降到 128MB）
+      "-c","work_mem=4MB",              # 单个排序/哈希操作的内存上限（复杂查询可能会用到，降到 4MB 节省内存）
+      "-c","effective_cache_size=256MB", # 优化器估算系统可用缓存大小（不是实际分配内存，只是 hint，设小一点）
+      "-c","maintenance_work_mem=64MB", # 维护任务（创建索引、VACUUM 等）时的内存限制，设小一点以免 OOM
+      "-c","max_connections=30",        # 最大并发连接数，默认很高（100+），小机器降到 30
+      "-c","wal_buffers=4MB",           # Write-Ahead Log 缓冲区大小，设 4MB 足够小项目使用
+      "-c","checkpoint_completion_target=0.7" # checkpoint 写入目标进度，默认 0.9，这里设 0.7 让写入更平滑
+    ]
+
+    volumes:
+      - db_data:/var/lib/postgresql/data     # 使用「命名卷」持久化 PG 数据（容器删了数据还在）
+    healthcheck:                      # 健康检查：等数据库“就绪”后，其他服务再启动
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s                    # 每 5s 检查一次
+      timeout: 3s                     # 超过 3s 视为失败
+      retries: 20                     # 失败重试 20 次（最多等待 ~100 秒）
+
+  app:                               # 应用服务（FastAPI）
+    build: ./app                     # 从 ./app/Dockerfile 构建镜像（定义运行环境与依赖）
+    container_name: vgs_app
+    environment:
+      DATABASE_URL: ${DATABASE_URL}  # 应用读这个连接串连接到上面的 db 服务
+      APP_PORT: ${APP_PORT}          # 应用监听的端口（uvicorn 用）
+    depends_on:                      # 启动顺序依赖：等 db 健康检查通过再启 app
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app                   # 绑定挂载应用源码（开发期方便热更新/改代码即生效）
+      - ./data:/app/data:ro          # 只读挂载 CSV 数据目录（供 init_db.py 导入）
+      - ./web:/app/web:ro            # 前端静态页目录（步骤三会用）
+    ports:
+      - "8000:8000"                  # 把宿主机 8000 暴露到容器 8000（浏览器访问 http://IP:8000）
+
+volumes:
+  db_data: {}                        # 声明命名卷（给 db 服务持久化数据用）
+# ===== 结束 =====
