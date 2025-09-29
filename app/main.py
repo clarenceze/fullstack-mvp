@@ -1,12 +1,28 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 import os
 
 app = FastAPI()
 
-# 挂载静态文件目录
-app.mount("/web", StaticFiles(directory="web"), name="web")
+# === 配置 CORS，让浏览器允许跨域访问 ===
+origins = [
+    "https://clarenceze.com",       # 你的 GitHub Pages 域名
+    "https://www.clarenceze.com"    # 兼容带 www 的情况
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,          # 允许的来源
+    allow_credentials=True,
+    allow_methods=["*"],            # 允许所有 HTTP 方法（GET/POST/PUT/DELETE）
+    allow_headers=["*"],            # 允许所有请求头
+)
+
+
+# 挂载静态文件目录，目前已经将静态文件上传到github page 进行托管
+#app.mount("/web", StaticFiles(directory="web"), name="web")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
