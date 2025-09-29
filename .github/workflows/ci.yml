@@ -60,8 +60,8 @@ jobs:
           file: ./app/Dockerfile         # 使用 app 目录下的 Dockerfile
           push: true                     # 构建完成后自动推送到 Docker Hub
           tags: |                        # 指定多个 tag
-            clarenceze/fullstack-mvp:latest        # latest：永远代表最新版本
-            clarenceze/fullstack-mvp:${{ env.TAG }} # 时间戳版本：用于历史留存
+            clarenceze/fullstack-mvp:latest        
+            clarenceze/fullstack-mvp:${{ env.TAG }} 
 
       # -------------------------------
       # 第 5 步：清理旧的 Docker Hub 标签（只保留最新 10 个版本 + latest）
