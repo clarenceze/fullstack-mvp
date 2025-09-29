@@ -27,7 +27,7 @@
   <script>
     document.getElementById("loadData").addEventListener("click", async () => {
       try {
-        const response = await fetch("https://clarenceze.com/api/query");
+        const response = await fetch("https://api.clarenceze.com/api/query");
         if (!response.ok) {
           throw new Error("Network response was not ok");
         }
