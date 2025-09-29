@@ -1,0 +1,98 @@
+# -------------------------------
+# 工作流名称，会显示在 GitHub Actions 页面上
+# -------------------------------
+name: CI to Docker Hub
+
+# -------------------------------
+# 触发条件：
+# 当代码被推送（push）到 main 分支时，自动运行此工作流
+# -------------------------------
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  # 定义一个任务 (job)，名字叫 build-and-push
+  build-and-push:
+    # 指定任务运行环境，这里用 GitHub 提供的最新 Ubuntu 虚拟机
+    runs-on: ubuntu-latest
+
+    steps:
+      # -------------------------------
+      # 第 1 步：检出（checkout）代码
+      # 相当于在 GitHub 的虚拟机里执行 git clone，把仓库代码拉取到本地
+      # -------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # -------------------------------
+      # 第 2 步：登录 Docker Hub
+      # 使用 GitHub Secrets 里的 DOCKER_USERNAME 和 DOCKER_PASSWORD（或 Token）
+      # 避免把敏感信息写死在文件里
+      # -------------------------------
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}   # Docker Hub 用户名
+          password: ${{ secrets.DOCKER_PASSWORD }}   # Docker Hub 密码或 Token
+
+      # -------------------------------
+      # 第 3 步：生成时间戳 TAG
+      # 作用：在每次构建时生成一个唯一的版本号，例如 "2025-09-29-1830"
+      # 存入 GitHub 的环境变量 env.TAG 中，供后续步骤使用
+      # -------------------------------
+      - name: Set up image tag
+        id: vars
+        run: echo "TAG=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_ENV
+
+      # -------------------------------
+      # 第 4 步：构建并推送镜像
+      # 使用官方的 docker/build-push-action
+      #  - context: 指定构建上下文目录（这里是 ./app）
+      #  - file: 指定 Dockerfile 文件路径
+      #  - push: true 表示构建完成后立即推送到 Docker Hub
+      #  - tags: 镜像的名字和标签，可以同时指定多个
+      # -------------------------------
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./app                 # 构建上下文，app 目录里的文件会被打包进镜像
+          file: ./app/Dockerfile         # 使用 app 目录下的 Dockerfile
+          push: true                     # 构建完成后自动推送到 Docker Hub
+          tags: |                        # 指定多个 tag
+            clarenceze/fullstack-mvp:latest        # latest：永远代表最新版本
+            clarenceze/fullstack-mvp:${{ env.TAG }} # 时间戳版本：用于历史留存
+
+      # -------------------------------
+      # 第 5 步：清理旧的 Docker Hub 标签（只保留最新 10 个版本 + latest）
+      # 1. 先获取 Docker Hub API 登录 token
+      # 2. 用 API 获取仓库的 tag 列表（排除 latest）
+      # 3. 如果数量大于 10，则删除旧的，只保留最新的 10 个
+      # -------------------------------
+      - name: Clean up old Docker Hub tags
+        run: |
+          echo "Fetching tags from Docker Hub..."
+          # 登录 Docker Hub API，获取 JWT token
+          TOKEN=$(curl -s -H "Content-Type: application/json" \
+            -X POST -d '{"username": "${{ secrets.DOCKER_USERNAME }}", "password": "${{ secrets.DOCKER_PASSWORD }}"}' \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+
+          # 获取所有 tag（最多 100 个），排除 latest
+          TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
+            https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/?page_size=100 \
+            | jq -r '.results[].name' | grep -v latest)
+
+          COUNT=$(echo "$TAGS" | wc -l)   # 统计 tag 数量
+          echo "Total tags (excluding latest): $COUNT"
+
+          if [ $COUNT -gt 10 ]; then
+            # 保留前 10 个，删除多余的（tail -n +11 表示从第 11 个开始）
+            DELETE_TAGS=$(echo "$TAGS" | tail -n +11)
+            for tag in $DELETE_TAGS; do
+              echo "Deleting old tag: $tag"
+              curl -s -X DELETE -H "Authorization: JWT $TOKEN" \
+                https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/$tag/
+            done
+          else
+            echo "No cleanup needed, tags count <= 10"
+          fi
