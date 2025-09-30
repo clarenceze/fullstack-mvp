@@ -9,7 +9,8 @@ app = FastAPI()
 # === 配置 CORS，让浏览器允许跨域访问 ===
 origins = [
     "https://clarenceze.com",       # 你的 GitHub Pages 域名
-    "https://www.clarenceze.com"    # 兼容带 www 的情况
+    "https://www.clarenceze.com",   # 兼容带 www 的情况
+    "https://clarenceze.github.io"
 ]
 
 app.add_middleware(
