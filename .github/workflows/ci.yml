@@ -1,98 +1,110 @@
-# -------------------------------
-# 工作流名称，会显示在 GitHub Actions 页面上
-# -------------------------------
+# ==========================================================
+# 📦 CI 工作流：自动测试 + 构建 + 推送 Docker 镜像
+# 作者：Hu Rongze
+# ==========================================================
 name: CI to Docker Hub
 
-# -------------------------------
-# 触发条件：
-# 当代码被推送（push）到 main 分支时，自动运行此工作流
-# -------------------------------
 on:
   push:
-    branches: ["main"]
+    branches: ["main"]   # 当推送到 main 分支时触发
 
 jobs:
-  # 定义一个任务 (job)，名字叫 build-and-push
   build-and-push:
-    # 指定任务运行环境，这里用 GitHub 提供的最新 Ubuntu 虚拟机
     runs-on: ubuntu-latest
 
     steps:
-      # -------------------------------
-      # 第 1 步：检出（checkout）代码
-      # 相当于在 GitHub 的虚拟机里执行 git clone，把仓库代码拉取到本地
-      # -------------------------------
-      - name: Checkout code
-        uses: actions/checkout@v3
+      # ------------------------------------------------------
+      # 第 1 步：检出仓库代码（相当于 git clone）
+      # ------------------------------------------------------
+      - name: 🧩 Checkout code
+        uses: actions/checkout@v4
 
-      # -------------------------------
-      # 第 2 步：登录 Docker Hub
-      # 使用 GitHub Secrets 里的 DOCKER_USERNAME 和 DOCKER_PASSWORD（或 Token）
-      # 避免把敏感信息写死在文件里
-      # -------------------------------
-      - name: Log in to Docker Hub
+      # ------------------------------------------------------
+      # 第 2 步：设置 Python 环境（用于运行 pytest）
+      # ------------------------------------------------------
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ------------------------------------------------------
+      # 第 3 步：缓存 pip 依赖（节省构建时间）
+      # ------------------------------------------------------
+      - name: ♻️ Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ------------------------------------------------------
+      # 第 4 步：安装依赖并运行冒烟测试
+      # ------------------------------------------------------
+      - name: 🧪 Run Smoke Tests
+        working-directory: ./app
+        run: |
+          echo "🚀 开始安装依赖..."
+          pip install -r requirements.txt
+          echo "🧩 安装 pytest..."
+          pip install pytest
+          echo "🧠 运行冒烟测试..."
+          pytest -v --maxfail=1 --disable-warnings
+        # ✅ 如果测试失败，这个步骤会中断整个 CI 流程
+
+      # ------------------------------------------------------
+      # 第 5 步：登录 Docker Hub
+      # ------------------------------------------------------
+      - name: 🔑 Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}   # Docker Hub 用户名
-          password: ${{ secrets.DOCKER_PASSWORD }}   # Docker Hub 密码或 Token
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # -------------------------------
-      # 第 3 步：生成时间戳 TAG
-      # 作用：在每次构建时生成一个唯一的版本号，例如 "2025-09-29-1830"
-      # 存入 GitHub 的环境变量 env.TAG 中，供后续步骤使用
-      # -------------------------------
-      - name: Set up image tag
+      # ------------------------------------------------------
+      # 第 6 步：生成时间戳 TAG（如 2025-10-05-2200）
+      # ------------------------------------------------------
+      - name: 🕒 Set up image tag
         id: vars
         run: echo "TAG=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_ENV
 
-      # -------------------------------
-      # 第 4 步：构建并推送镜像
-      # 使用官方的 docker/build-push-action
-      #  - context: 指定构建上下文目录（这里是 ./app）
-      #  - file: 指定 Dockerfile 文件路径
-      #  - push: true 表示构建完成后立即推送到 Docker Hub
-      #  - tags: 镜像的名字和标签，可以同时指定多个
-      # -------------------------------
-      - name: Build and push Docker image
+      # ------------------------------------------------------
+      # 第 7 步：构建并推送 Docker 镜像
+      # ------------------------------------------------------
+      - name: 🐳 Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./app                 # 构建上下文，app 目录里的文件会被打包进镜像
-          file: ./app/Dockerfile         # 使用 app 目录下的 Dockerfile
-          push: true                     # 构建完成后自动推送到 Docker Hub
-          tags: |                        # 指定多个 tag
-            clarenceze/fullstack-mvp:latest        
-            clarenceze/fullstack-mvp:${{ env.TAG }} 
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: |
+            clarenceze/fullstack-mvp:latest
+            clarenceze/fullstack-mvp:${{ env.TAG }}
 
-      # -------------------------------
-      # 第 5 步：清理旧的 Docker Hub 标签（只保留最新 10 个版本 + latest）
-      # 1. 先获取 Docker Hub API 登录 token
-      # 2. 用 API 获取仓库的 tag 列表（排除 latest）
-      # 3. 如果数量大于 10，则删除旧的，只保留最新的 10 个
-      # -------------------------------
-      - name: Clean up old Docker Hub tags
+      # ------------------------------------------------------
+      # 第 8 步：清理旧版本标签（保留最新 10 个 + latest）
+      # ------------------------------------------------------
+      - name: 🧹 Clean up old Docker Hub tags
         run: |
-          echo "Fetching tags from Docker Hub..."
-          # 登录 Docker Hub API，获取 JWT token
+          echo "🧾 获取 Docker Hub 标签列表..."
           TOKEN=$(curl -s -H "Content-Type: application/json" \
             -X POST -d '{"username": "${{ secrets.DOCKER_USERNAME }}", "password": "${{ secrets.DOCKER_PASSWORD }}"}' \
             https://hub.docker.com/v2/users/login/ | jq -r .token)
 
-          # 获取所有 tag（最多 100 个），排除 latest
           TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
             https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/?page_size=100 \
             | jq -r '.results[].name' | grep -v latest)
 
-          COUNT=$(echo "$TAGS" | wc -l)   # 统计 tag 数量
-          echo "Total tags (excluding latest): $COUNT"
+          COUNT=$(echo "$TAGS" | wc -l)
+          echo "📊 当前标签数量: $COUNT"
 
           if [ $COUNT -gt 10 ]; then
-            # 保留前 10 个，删除多余的（tail -n +11 表示从第 11 个开始）
             DELETE_TAGS=$(echo "$TAGS" | tail -n +11)
             for tag in $DELETE_TAGS; do
-              echo "Deleting old tag: $tag"
+              echo "🚮 删除旧标签: $tag"
               curl -s -X DELETE -H "Authorization: JWT $TOKEN" \
                 https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/$tag/
             done
           else
-            echo "No cleanup needed, tags count <= 10"
+            echo "✨ 无需清理，标签数量 <= 10"
           fi
