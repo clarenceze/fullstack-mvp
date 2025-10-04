@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# pytest cache
+.pytest_cache/
+
+# Virtual environments
+venv/
+.env/
+*.env
+
+# System
+.DS_Store
+
+# Logs
+*.log
+
