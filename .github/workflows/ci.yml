@@ -46,10 +46,11 @@ jobs:
         run: |
           echo "🚀 开始安装依赖..."
           pip install -r requirements.txt
-          echo "🧩 安装 pytest..."
-          pip install pytest
+          echo "🧩 安装 pytest 与 httpx..."
+          pip install pytest httpx
           echo "🧠 运行冒烟测试..."
           pytest -v --maxfail=1 --disable-warnings
+
         # ✅ 如果测试失败，这个步骤会中断整个 CI 流程
 
       # ------------------------------------------------------
