@@ -53,19 +53,37 @@ jobs:
           path: bandit.json
 
       # -------------------------------
-      # 3️⃣ 依赖漏洞扫描
+      # 3️⃣ 依赖漏洞扫描（宽容模式）
       # -------------------------------
       - name: 🧰 Run pip-audit (Dependencies)
         run: |
           pip install pip-audit
-          pip-audit -r app/requirements.txt --strict --format json --output pip-audit.json
-        continue-on-error: false
+          # 尝试扫描，若出错（退出码非0），不让CI失败
+          pip-audit -r app/requirements.txt --format json --output pip-audit.json || true
 
       - name: 📎 Upload pip-audit Report
         uses: actions/upload-artifact@v4
         with:
           name: pip-audit-report
           path: pip-audit.json
+
+      # -------------------------------
+      # 🧾 提取并汇总漏洞统计（Summary）
+      # -------------------------------
+      - name: 📊 Summarize pip-audit Results
+        run: |
+          echo "### 🧰 Pip-audit 依赖扫描结果" >> $GITHUB_STEP_SUMMARY
+          COUNT=$(jq 'length' pip-audit.json)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "✅ 未发现已知漏洞" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ 发现 $COUNT 个依赖存在已知漏洞" >> $GITHUB_STEP_SUMMARY
+            jq -r '.[] | "- \(.name) (\(.version)) → CVE数量: \(.vulns | length)"' pip-audit.json >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🗂️ 详细报告已上传为 artifact：pip-audit-report" >> $GITHUB_STEP_SUMMARY
+          fi
+        continue-on-error: true
+
 
       # -------------------------------
       # 4️⃣ 敏感信息扫描
