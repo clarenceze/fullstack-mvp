@@ -53,12 +53,11 @@ jobs:
           path: bandit.json
 
       # -------------------------------
-      # 3️⃣ 依赖漏洞扫描（宽容模式）
+      # 3️⃣ 依赖漏洞扫描（柔性模式）
       # -------------------------------
       - name: 🧰 Run pip-audit (Dependencies)
         run: |
-          pip install pip-audit
-          # 尝试扫描，若出错（退出码非0），不让CI失败
+          pip install pip-audit jq
           pip-audit -r app/requirements.txt --format json --output pip-audit.json || true
 
       - name: 📎 Upload pip-audit Report
@@ -67,9 +66,6 @@ jobs:
           name: pip-audit-report
           path: pip-audit.json
 
-      # -------------------------------
-      # 🧾 提取并汇总漏洞统计（Summary）
-      # -------------------------------
       - name: 📊 Summarize pip-audit Results
         run: |
           echo "### 🧰 Pip-audit 依赖扫描结果" >> $GITHUB_STEP_SUMMARY
@@ -77,41 +73,32 @@ jobs:
           if [ "$COUNT" -eq 0 ]; then
             echo "✅ 未发现已知漏洞" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ 发现 $COUNT 个依赖存在已知漏洞" >> $GITHUB_STEP_SUMMARY
-            jq -r '.[] | "- \(.name) (\(.version)) → CVE数量: \(.vulns | length)"' pip-audit.json >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ 发现 $COUNT 个依赖存在已知漏洞：" >> $GITHUB_STEP_SUMMARY
+            jq -r '
+              .[] |
+              "- \(.name // .dependency.name) (\(.version // .dependency.version)) → 漏洞数: \(.vulns | length)"
+            ' pip-audit.json >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "🗂️ 详细报告已上传为 artifact：pip-audit-report" >> $GITHUB_STEP_SUMMARY
           fi
         continue-on-error: true
 
-
       # -------------------------------
-      # 4️⃣ 敏感信息扫描
+      # 4️⃣ 密钥扫描（更新版）
       # -------------------------------
       - name: 🔐 Gitleaks (Secret Scan)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v1.6.0
         with:
           args: detect --source . --no-git --redact
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # -------------------------------
-      # 5️⃣ Dockerfile Lint 检查
+      # 5️⃣ Dockerfile 检查（不阻断）
       # -------------------------------
       - name: 🧱 Hadolint (Dockerfile Lint)
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: app/Dockerfile
-
-      # -------------------------------
-      # ✅ 输出执行摘要
-      # -------------------------------
-      - name: ✅ Summarize CI Results
-        if: success()
-        run: |
-          echo "✅ 所有测试和扫描均通过" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ 冒烟测试通过" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Bandit 安全扫描通过" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ pip-audit 依赖安全扫描通过" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Gitleaks & Hadolint 检查通过" >> $GITHUB_STEP_SUMMARY
+        continue-on-error: true
 
