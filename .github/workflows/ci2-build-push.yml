@@ -1,0 +1,89 @@
+name: CI2 - Build & Push Docker Image
+
+on:
+  workflow_run:
+    workflows: ["CI1 - Test & Security Scan"]
+    types:
+      - completed
+  workflow_dispatch:  # ✅ 手动触发入口（方便调试）
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+
+    steps:
+      - name: 🧩 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: ♻️ Enable Docker layer cache
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: buildx-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            buildx-${{ github.ref_name }}-
+
+      - name: 🕒 Set up image tag
+        id: vars
+        run: |
+          echo "TAG=$(date +'%Y-%m-%d-%H%M')" >> $GITHUB_ENV
+          echo "🔖 TAG=${TAG}" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🔑 Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 🧱 Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: |
+            clarenceze/fullstack-mvp:latest
+            clarenceze/fullstack-mvp:${{ env.TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 🧹 Clean up old Docker Hub tags
+        run: |
+          echo "🧾 Fetching tags from Docker Hub..."
+          TOKEN=$(curl -s -H "Content-Type: application/json" \
+            -X POST -d '{"username": "${{ secrets.DOCKER_USERNAME }}", "password": "${{ secrets.DOCKER_PASSWORD }}"}' \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+
+          TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
+            https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/?page_size=100 \
+            | jq -r '.results[].name' | grep -v latest)
+
+          COUNT=$(echo "$TAGS" | wc -l)
+          echo "Total tags: $COUNT"
+
+          if [ $COUNT -gt 10 ]; then
+            DELETE_TAGS=$(echo "$TAGS" | tail -n +11)
+            for tag in $DELETE_TAGS; do
+              # 避免误删稳定分支
+              if [[ "$tag" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2} ]]; then
+                echo "Deleting old tag: $tag"
+                curl -s -X DELETE -H "Authorization: JWT $TOKEN" \
+                  https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/$tag/
+              fi
+            done
+          else
+            echo "No cleanup needed."
+          fi
+
+      - name: ✅ Summary
+        if: success()
+        run: |
+          echo "✅ Docker 镜像已成功构建并推送" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: clarenceze/fullstack-mvp:${TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache: 持久化启用" >> $GITHUB_STEP_SUMMARY

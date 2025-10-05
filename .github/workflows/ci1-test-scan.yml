@@ -1,0 +1,99 @@
+name: CI1 - Test & Security Scan
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test-and-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧩 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: ♻️ Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # -------------------------------
+      # 1️⃣ 冒烟测试
+      # -------------------------------
+      - name: 🧪 Run Smoke Tests
+        working-directory: ./app
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx
+          pytest -v --maxfail=1 --disable-warnings --tb=short
+
+      # -------------------------------
+      # 2️⃣ Python 静态漏洞扫描
+      # -------------------------------
+      - name: 🔎 Run Bandit (Python SAST)
+        run: |
+          pip install bandit
+          bandit -r app -ll -ii -f json -o bandit.json
+        continue-on-error: false
+
+      - name: 📎 Upload Bandit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit.json
+
+      # -------------------------------
+      # 3️⃣ 依赖漏洞扫描
+      # -------------------------------
+      - name: 🧰 Run pip-audit (Dependencies)
+        run: |
+          pip install pip-audit
+          pip-audit -r app/requirements.txt --strict --format json --output pip-audit.json
+        continue-on-error: false
+
+      - name: 📎 Upload pip-audit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit.json
+
+      # -------------------------------
+      # 4️⃣ 敏感信息扫描
+      # -------------------------------
+      - name: 🔐 Gitleaks (Secret Scan)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --source . --no-git --redact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -------------------------------
+      # 5️⃣ Dockerfile Lint 检查
+      # -------------------------------
+      - name: 🧱 Hadolint (Dockerfile Lint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: app/Dockerfile
+
+      # -------------------------------
+      # ✅ 输出执行摘要
+      # -------------------------------
+      - name: ✅ Summarize CI Results
+        if: success()
+        run: |
+          echo "✅ 所有测试和扫描均通过" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 冒烟测试通过" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Bandit 安全扫描通过" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ pip-audit 依赖安全扫描通过" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Gitleaks & Hadolint 检查通过" >> $GITHUB_STEP_SUMMARY
+
