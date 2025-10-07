@@ -30,9 +30,9 @@ jobs:
             echo "✅ 开始自动部署 fullstack-mvp ..."
             cd /root/fullstack-mvp
             echo "📦 拉取最新镜像 ..."
-            docker-compose pull app
+            docker compose pull app
             echo "♻️ 重启应用容器 ..."
-            docker-compose up -d --force-recreate app
+            docker compose up -d --force-recreate app
             echo "🧹 清理旧镜像 ..."
             docker image prune -f
             echo "🎉 部署完成，当前运行镜像："
