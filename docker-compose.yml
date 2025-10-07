@@ -4,7 +4,7 @@ services:                            # 定义要运行的「服务」（每个�
 
   db:                                # 数据库服务（PostgreSQL）
     image: postgres:16               # 使用官方 Postgres 16 镜像
-    container_name: vgs_db           # 容器名称（便于 docker ps/exec 时识别）
+    container_name: db           # 容器名称（便于 docker ps/exec 时识别）
     environment:                     # 传入环境变量（从同目录下 .env 里取值）
       POSTGRES_DB: ${POSTGRES_DB}          # 初始化数据库名
       POSTGRES_USER: ${POSTGRES_USER}      # 数据库用户名
@@ -29,8 +29,9 @@ services:                            # 定义要运行的「服务」（每个�
       retries: 20                     # 失败重试 20 次（最多等待 ~100 秒）
 
   app:                               # 应用服务（FastAPI）
+    image: clarenceze/fullstack-mvp:latest      # ✅ 明确指定镜像名，与 DockerHub 一致 
     build: ./app                     # 从 ./app/Dockerfile 构建镜像（定义运行环境与依赖）
-    container_name: vgs_app
+    container_name: app
     environment:
       DATABASE_URL: ${DATABASE_URL}  # 应用读这个连接串连接到上面的 db 服务
       APP_PORT: ${APP_PORT}          # 应用监听的端口（uvicorn 用）
