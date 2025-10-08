@@ -35,6 +35,7 @@ services:                            # 定义要运行的「服务」（每个�
     environment:
       DATABASE_URL: ${DATABASE_URL}  # 应用读这个连接串连接到上面的 db 服务
       APP_PORT: ${APP_PORT}          # 应用监听的端口（uvicorn 用）
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY} 
     depends_on:                      # 启动顺序依赖：等 db 健康检查通过再启 app
       db:
         condition: service_healthy
