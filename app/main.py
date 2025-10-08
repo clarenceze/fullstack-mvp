@@ -8,7 +8,7 @@
 # =========================================
 
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query   # ✅ 增加 Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
