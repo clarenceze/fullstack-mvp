@@ -8,7 +8,7 @@
 # =========================================
 
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query   # ✅ 增加 Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
@@ -104,3 +104,23 @@ def query_top10():
     except Exception as e:
         # 捕获数据库或 SQL 错误，返回描述信息（防止 500 错）
         return {"error": f"Database query failed: {str(e)}"}
+
+
+
+# =========================================
+# ✅ 新增接口：自然语言 → SQL 智能生成
+# =========================================
+@app.get("/api/query_llm")
+def query_llm(question: str = Query(..., description="用户自然语言问题")):
+    """
+    調用 Gemini 智能模組 (Seq2SQL)，將自然語言轉換為 SQL。
+    返回：
+      {"sql": "...", "desc": "..."}
+    示例：
+      /api/query_llm?question=找出2015年後在PS4上銷量最高的遊戲
+    """
+    try:
+        result = generate_sql_from_nl(question)
+        return result
+    except Exception as e:
+        return {"error": f"LLM query failed: {str(e)}"}
