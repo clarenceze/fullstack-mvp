@@ -3,3 +3,6 @@ fastapi==0.112.2         # Web 框架
 uvicorn[standard]==0.30.6 # ASGI 服务器（跑 FastAPI）
 jinja2==3.1.4            # 模板（后面若需要服务静态页/模板）
 python-multipart==0.0.9  # 处理表单/文件上传（预留）
+
+google-genai>=2.0.0
+python-dotenv>=1.0.0
