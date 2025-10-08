@@ -11,6 +11,7 @@
 from fastapi import FastAPI, Query   # ✅ 增加 Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from seq2sql import generate_sql_from_nl
 import psycopg2
 import os
 
