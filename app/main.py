@@ -13,6 +13,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 import os
+try:
+    # ✅ CI 环境 (pytest 从仓库根目录运行)
+    from app.seq2sql import generate_sql_from_nl
+except ModuleNotFoundError:
+    # ✅ Docker 运行环境 (/app 是工作目录)
+    from seq2sql import generate_sql_from_nl
 
 app = FastAPI()
 

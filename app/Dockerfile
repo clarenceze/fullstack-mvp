@@ -3,6 +3,8 @@ FROM python:3.11-slim
 
 # 设置容器内的工作目录为 /app，后续命令都在此目录执行
 WORKDIR /app
+ENV PYTHONPATH=/app
+
 
 # 安装系统依赖：
 # - build-essential：编译 C 扩展需要（很多 Python 包依赖）
