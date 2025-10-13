@@ -2,13 +2,12 @@ name: CD - Deploy to ECS Server
 
 on:
   workflow_run:
-    workflows: ["CI2 - Build & Push Docker Image"]  # 👈 当CI2成功后自动触发
-    types:
-      - completed
-  workflow_dispatch:  # 手动触发调试入口
+    workflows: ["CI2 - Build & Push Docker Image"]
+    types: [completed]
+  workflow_dispatch:
     inputs:
       manual:
-        description: '手动触发部署'
+        description: '手动触发部署（调试使用）'
         required: false
         default: 'true'
 
@@ -16,10 +15,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
 
     steps:
+      # -------------------------------
+      # 🚀 部署到生产服务器
+      # -------------------------------
       - name: 🚀 部署至生产服务器
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -31,9 +34,91 @@ jobs:
             cd /root/fullstack-mvp
             echo "📦 拉取最新镜像 ..."
             docker compose pull app
-            echo "♻️ 重启应用容器 ..."
+            echo "♻️ 重新启动容器 ..."
             docker compose up -d --force-recreate app
-            echo "🧹 清理旧镜像 ..."
-            docker image prune -f
-            echo "🎉 部署完成，当前运行镜像："
-            docker ps --filter "name=app" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+            echo "🧹 清理未使用镜像 ..."
+            docker image prune -af --filter "until=24h"
+
+      # -------------------------------
+      # 🩺 健康检查（检测 /health）
+      # -------------------------------
+      - name: 🩺 健康检查
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "🩺 检查服务健康状态..."
+            sleep 10
+            if curl -fs http://localhost:8000/health; then
+              echo "✅ 服务运行正常"
+            else
+              echo "❌ 健康检查失败，退出以触发回滚"
+              exit 1
+            fi
+
+      # -------------------------------
+      # 🔁 自动回滚 + 删除错误镜像
+      # -------------------------------
+      - name: 🔁 自动回滚（若健康检查失败）
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "⚠️ 健康检查失败，执行回滚逻辑..."
+
+            # 1️⃣ 获取当前与上一个镜像 tag
+            CURRENT_TAG=$(docker images clarenceze/fullstack-mvp --format "{{.Tag}}" | grep -v latest | sort -r | sed -n '1p')
+            PREV_TAG=$(docker images clarenceze/fullstack-mvp --format "{{.Tag}}" | grep -v latest | sort -r | sed -n '2p')
+            echo "🧾 当前失败版本: $CURRENT_TAG"
+            echo "🧾 上一个稳定版本: $PREV_TAG"
+
+            # 2️⃣ 回滚到上一个版本镜像
+            if [ -n "$PREV_TAG" ]; then
+              docker pull clarenceze/fullstack-mvp:$PREV_TAG
+              docker tag clarenceze/fullstack-mvp:$PREV_TAG clarenceze/fullstack-mvp:latest
+              docker compose up -d --force-recreate app
+              echo "✅ 已回滚至 clarenceze/fullstack-mvp:$PREV_TAG"
+            else
+              echo "❌ 无法找到上一个镜像版本，回滚失败"
+              exit 1
+            fi
+
+            # 3️⃣ 登录 Docker Hub
+            echo "🔑 登录 Docker Hub ..."
+            TOKEN=$(curl -s -H "Content-Type: application/json" \
+              -X POST -d '{"username": "${{ secrets.DOCKER_USERNAME }}", "password": "${{ secrets.DOCKER_PASSWORD }}"}' \
+              https://hub.docker.com/v2/users/login/ | jq -r .token)
+
+            # 4️⃣ 删除云端错误镜像 tag（非 latest）
+            if [ -n "$CURRENT_TAG" ]; then
+              echo "🧹 删除 Docker Hub 上的错误镜像 tag: $CURRENT_TAG ..."
+              curl -s -X DELETE -H "Authorization: JWT $TOKEN" \
+                https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/$CURRENT_TAG/ || true
+              echo "✅ 已从 Docker Hub 删除错误镜像：$CURRENT_TAG"
+            fi
+
+            # 5️⃣ 更新 latest 指向旧版本
+            echo "🔁 重新推送旧版本为 latest ..."
+            docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
+            docker push clarenceze/fullstack-mvp:latest
+            echo "🎯 latest 已更新为稳定版本：$PREV_TAG"
+
+      # -------------------------------
+      # ✅ 部署结果总结
+      # -------------------------------
+      - name: ✅ Summary
+        if: success()
+        run: |
+          echo "🎉 部署成功" >> $GITHUB_STEP_SUMMARY
+          echo "- 当前镜像: clarenceze/fullstack-mvp:latest" >> $GITHUB_STEP_SUMMARY
+          echo "- 状态: 健康检查通过 ✅" >> $GITHUB_STEP_SUMMARY
+
+      - name: ⚠️ Failure Summary
+        if: failure()
+        run: |
+          echo "❌ 部署失败，已触发自动回滚并删除错误镜像" >> $GITHUB_STEP_SUMMARY
