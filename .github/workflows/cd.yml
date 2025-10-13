@@ -56,7 +56,7 @@ jobs:
             docker logs app | tail -n 30
 
             # 3️⃣ 访问 /health 并捕获状态码与返回内容
-            STATUS_CODE=$(curl -s -o response.txt -w "%{http_code}" --connect-timeout 5 http://localhost:8000/health || echo 000)
+            STATUS_CODE=$(curl -s -o response.txt -w "%{http_code}" --connect-timeout 5 http://localhost:8000/api/health || echo 000)
             echo "📡 HTTP 状态码: $STATUS_CODE"
             echo "📦 返回内容:"
             cat response.txt || true
