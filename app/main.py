@@ -130,3 +130,6 @@ def query_llm(question: str = Query(..., description="用户自然语言问题")
         return result
     except Exception as e:
         return {"error": f"LLM query failed: {str(e)}"}
+
+
+
