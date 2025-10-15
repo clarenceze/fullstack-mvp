@@ -86,14 +86,48 @@
         if (!response.ok) throw new Error("Network response was not ok");
         const data = await response.json();
 
-        // 顯示結果
+        // === 顯示 LLM 生成結果 ===
         document.getElementById("llmResult").style.display = "block";
         document.getElementById("sqlOutput").textContent = data.sql || "⚠️ 未生成 SQL";
         document.getElementById("descOutput").textContent = data.desc || "⚠️ 模型未提供解釋";
+
+        // === 如果後端有返回表格數據，動態渲染 ===
+        const table = document.getElementById("gamesTable");
+        const tbody = table.querySelector("tbody");
+        tbody.innerHTML = "";
+
+        if (data.columns && data.data && data.data.length > 0) {
+          // 生成表頭
+          const thead = table.querySelector("thead");
+          thead.innerHTML = "";
+          const headerRow = document.createElement("tr");
+          data.columns.forEach(col => {
+            const th = document.createElement("th");
+            th.textContent = col;
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+
+          // 生成資料行
+          data.data.forEach(row => {
+            const tr = document.createElement("tr");
+            row.forEach(cell => {
+              const td = document.createElement("td");
+              td.textContent = cell;
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+
+          table.style.display = "table";
+        } else {
+          table.style.display = "none";
+        }
       } catch (error) {
         alert("❌ 智能查詢失敗: " + error.message);
       }
     });
+
   </script>
 </body>
 </html>

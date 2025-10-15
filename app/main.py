@@ -11,7 +11,9 @@
 from fastapi import FastAPI, Query   # ✅ 增加 Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from utils import validate_sql
 import psycopg2
+import time
 import os
 try:
     # ✅ CI 环境 (pytest 从仓库根目录运行)
@@ -19,6 +21,9 @@ try:
 except ModuleNotFoundError:
     # ✅ Docker 运行环境 (/app 是工作目录)
     from seq2sql import generate_sql_from_nl
+from utils.logger import setup_logger
+logger = setup_logger("main")
+
 
 app = FastAPI()
 
@@ -117,19 +122,49 @@ def query_top10():
 # ✅ 新增接口：自然语言 → SQL 智能生成
 # =========================================
 @app.get("/api/query_llm")
-def query_llm(question: str = Query(..., description="用户自然语言问题")):
+def query_llm(question: str = Query(..., description="使用者的自然語言問題")):
     """
-    調用 Gemini 智能模組 (Seq2SQL)，將自然語言轉換為 SQL。
-    返回：
-      {"sql": "...", "desc": "..."}
-    示例：
-      /api/query_llm?question=找出2015年後在PS4上銷量最高的遊戲
+    調用 LLM (Gemini Seq2SQL)，將自然語言轉換為 SQL，
+    通過安全審查後查詢資料庫，返回結果與審查日誌。
     """
+    start_time = time.time()
+    nl_query = question
+
     try:
-        result = generate_sql_from_nl(question)
-        return result
+        # === 1️⃣ 生成 SQL ===
+        result = generate_sql_from_nl(nl_query)
+        ai_sql = result.get("sql", "").strip()
+
+        # === 2️⃣ 安全審查 ===
+        passed, checked_sql, tag = validate_sql(ai_sql)
+        if not passed:
+            logger.warning(f"[{tag}] {nl_query} → {ai_sql} → {checked_sql}")
+            raise HTTPException(status_code=400, detail=checked_sql)
+
+        # === 3️⃣ 執行 SQL ===
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        cur = conn.cursor()
+        cur.execute(checked_sql)
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+        cur.close()
+        conn.close()
+
+        elapsed = round(time.time() - start_time, 3)
+        logger.info(f"[PASS] {nl_query} | SQL={checked_sql} | rows={len(rows)} | time={elapsed}s")
+
+        # === 4️⃣ 返回結果 ===
+        return {
+            "columns": columns,
+            "data": rows,
+            "sql": checked_sql,
+            "elapsed": elapsed,
+            "desc": result.get("desc", "")
+        }
+
+    except HTTPException:
+        # 由 validate_sql 拋出，直接返回
+        raise
     except Exception as e:
-        return {"error": f"LLM query failed: {str(e)}"}
-
-
-
+        logger.error(f"[ERROR] {nl_query} | err={str(e)}")
+        raise HTTPException(status_code=500, detail=f"❌ 系統錯誤：{str(e)}")
