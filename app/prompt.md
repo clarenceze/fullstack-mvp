@@ -10,7 +10,7 @@
 
 1. **只允許使用 `SELECT` 語句**。
 2. **不得包含 `UPDATE`、`DELETE`、`INSERT`、`DROP`、`ALTER` 等關鍵字**。
-3. **僅可查詢資料表 `games`**。
+3. **僅可查詢資料表 `vgs_view`**。
 4. **請使用合理的欄位名與條件，避免語法錯誤。**
 5. **請勿執行 SQL，僅生成語句文字。**
 6. **回傳格式必須是 JSON。**
@@ -23,7 +23,7 @@
 
 ```json
 {
-  "sql": "SELECT ... FROM games WHERE ...;",
+  "sql": "SELECT ... FROM vgs_view WHERE ...;",
   "desc": "這條 SQL 用於 ..."
 }
 ```
@@ -56,7 +56,7 @@
 ### 模型回答：
 ```json
 {
-  "sql": "SELECT name, platform, year, global_sales FROM games WHERE year > 2010 ORDER BY global_sales DESC LIMIT 5;",
+  "sql": "SELECT name, platform, year, global_sales FROM vgs_view WHERE year > 2010 ORDER BY global_sales DESC LIMIT 5;",
   "desc": "查詢 2010 年後全球銷量最高的前五款遊戲。"
 }
 ```
@@ -65,5 +65,5 @@
 
 ## 📕 最後提醒
 - 請務必輸出 JSON 格式。
-- 僅查詢 `games`。
+- 僅查詢 `vgs_view`。
 - 不要添加任何額外解釋文字。
