@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 import os
 import time
+import uuid
 
 # ====================================================
 # 兼容不同環境（CI / Docker）
@@ -130,26 +131,28 @@ def query_top10():
 # ✅ 新增接口：自然语言 → SQL 智能生成
 # =========================================
 @app.get("/api/query_llm")
-def query_llm(question: str = Query(..., description="使用者的自然語言問題")):
-    """
-    調用 LLM (Gemini Seq2SQL)，將自然語言轉換為 SQL，
-    通過安全審查後查詢資料庫，返回結果與審查日誌。
-    """
+def query_llm(
+    question: str = Query(..., description="使用者的自然語言問題"),
+    request: Request = None
+):
+    req_id = str(uuid.uuid4())[:8]  # 生成唯一請求 ID
     start_time = time.time()
     nl_query = question
 
+    logger.info(f"[REQ:{req_id}] [REQUEST] question='{nl_query}'")
+
     try:
-        # === 1️⃣ 生成 SQL ===
         result = generate_sql_from_nl(nl_query)
         ai_sql = result.get("sql", "").strip()
+        logger.info(f"[REQ:{req_id}] [GENERATION] SQL='{ai_sql}'")
 
-        # === 2️⃣ 安全審查 ===
         passed, checked_sql, tag = validate_sql(ai_sql)
         if not passed:
-            logger.warning(f"[{tag}] {nl_query} → {ai_sql} → {checked_sql}")
+            logger.warning(f"[REQ:{req_id}] [BLOCKED] tag={tag} | reason='{checked_sql}'")
             raise HTTPException(status_code=400, detail=checked_sql)
+        else:
+            logger.info(f"[REQ:{req_id}] [SECURITY] tag={tag} | SQL passed validation")
 
-        # === 3️⃣ 執行 SQL ===
         conn = psycopg2.connect(os.getenv("DATABASE_URL"))
         cur = conn.cursor()
         cur.execute(checked_sql)
@@ -159,20 +162,20 @@ def query_llm(question: str = Query(..., description="使用者的自然語言�
         conn.close()
 
         elapsed = round(time.time() - start_time, 3)
-        logger.info(f"[PASS] {nl_query} | SQL={checked_sql} | rows={len(rows)} | time={elapsed}s")
+        logger.info(f"[REQ:{req_id}] [EXECUTION] rows={len(rows)} | time={elapsed}s")
 
-        # === 4️⃣ 返回結果 ===
         return {
             "columns": columns,
             "data": rows,
             "sql": checked_sql,
             "elapsed": elapsed,
+            "req_id": req_id,
             "desc": result.get("desc", "")
         }
 
-    except HTTPException:
-        # 由 validate_sql 拋出，直接返回
+    except HTTPException as e:
+        logger.warning(f"[REQ:{req_id}] [DENIED] reason={e.detail}")
         raise
     except Exception as e:
-        logger.error(f"[ERROR] {nl_query} | err={str(e)}")
+        logger.error(f"[REQ:{req_id}] [ERROR] err={str(e)}")
         raise HTTPException(status_code=500, detail=f"❌ 系統錯誤：{str(e)}")
