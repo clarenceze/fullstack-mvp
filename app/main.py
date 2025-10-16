@@ -8,23 +8,31 @@
 # =========================================
 
 
-from fastapi import FastAPI, Query   # ✅ 增加 Query
-from fastapi.staticfiles import StaticFiles
+# ====================================================
+# Import core modules
+# ====================================================
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from utils import validate_sql
 import psycopg2
-import time
 import os
+import time
+
+# ====================================================
+# 兼容不同環境（CI / Docker）
+# ====================================================
 try:
-    # ✅ CI 环境 (pytest 从仓库根目录运行)
-    from app.seq2sql import generate_sql_from_nl
-except ModuleNotFoundError:
-    # ✅ Docker 运行环境 (/app 是工作目录)
+    # ✅ Docker 環境：WORKDIR /app
+    from utils import validate_sql
+    from utils.logger import setup_logger
     from seq2sql import generate_sql_from_nl
-from utils.logger import setup_logger
+except ModuleNotFoundError:
+    # ✅ CI 環境：pytest 從倉庫根目錄運行
+    from app.utils import validate_sql
+    from app.utils.logger import setup_logger
+    from app.seq2sql import generate_sql_from_nl
+
+
 logger = setup_logger("main")
-
-
 app = FastAPI()
 
 # === 配置 CORS，让浏览器允许跨域访问 ===
