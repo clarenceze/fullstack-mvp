@@ -1,51 +1,118 @@
-version: "3.9"                       # Compose 规范版本（3.9 即 v3 系列的最新一代）
+version: "3.9"  # ✅ Compose 文件规范版本（v3.9 是目前 v3 系列的最高版本）
 
-services:                            # 定义要运行的「服务」（每个服务对应一个或一组容器）
+services:  # 定义要运行的多个服务，每个服务都会对应一个容器
 
-  db:                                # 数据库服务（PostgreSQL）
-    image: postgres:16               # 使用官方 Postgres 16 镜像
-    container_name: db           # 容器名称（便于 docker ps/exec 时识别）
-    environment:                     # 传入环境变量（从同目录下 .env 里取值）
-      POSTGRES_DB: ${POSTGRES_DB}          # 初始化数据库名
-      POSTGRES_USER: ${POSTGRES_USER}      # 数据库用户名
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # 数据库密码
-    command: [
-      "postgres",                       # 启动 PostgreSQL 主进程
-      "-c","shared_buffers=128MB",      # PG 用于缓存数据页的内存（默认更大，小内存机器降到 128MB）
-      "-c","work_mem=4MB",              # 单个排序/哈希操作的内存上限（复杂查询可能会用到，降到 4MB 节省内存）
-      "-c","effective_cache_size=256MB", # 优化器估算系统可用缓存大小（不是实际分配内存，只是 hint，设小一点）
-      "-c","maintenance_work_mem=64MB", # 维护任务（创建索引、VACUUM 等）时的内存限制，设小一点以免 OOM
-      "-c","max_connections=30",        # 最大并发连接数，默认很高（100+），小机器降到 30
-      "-c","wal_buffers=4MB",           # Write-Ahead Log 缓冲区大小，设 4MB 足够小项目使用
-      "-c","checkpoint_completion_target=0.7" # checkpoint 写入目标进度，默认 0.9，这里设 0.7 让写入更平滑
+  # =======================================================
+  # ① 数据库服务 (PostgreSQL)
+  # =======================================================
+  db:
+    image: postgres:16                  # 使用官方 PostgreSQL 16 镜像
+    container_name: db                  # 容器名称（docker ps 时容易识别）
+    restart: always                     # 若容器异常退出会自动重启
+    environment:                        # 环境变量，用于初始化数据库
+      POSTGRES_DB: ${POSTGRES_DB}           # 初始化数据库名称
+      POSTGRES_USER: ${POSTGRES_USER}       # 数据库用户名
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # 数据库密码
+    command: [                           # 调整 PostgreSQL 的运行参数（性能优化）
+      "postgres",
+      "-c","shared_buffers=128MB",       # PG 缓存页大小（调小以适配低内存环境）
+      "-c","work_mem=4MB",               # 单个查询操作的内存限制
+      "-c","effective_cache_size=256MB", # 查询优化器假设可用缓存大小
+      "-c","maintenance_work_mem=64MB",  # 索引、VACUUM 等维护任务使用的内存
+      "-c","max_connections=30",         # 最大并发连接数
+      "-c","wal_buffers=4MB",            # WAL 日志缓冲区大小
+      "-c","checkpoint_completion_target=0.7" # 检查点写入速度控制参数
     ]
-
     volumes:
-      - db_data:/var/lib/postgresql/data     # 使用「命名卷」持久化 PG 数据（容器删了数据还在）
-    healthcheck:                      # 健康检查：等数据库“就绪”后，其他服务再启动
+      - db_data:/var/lib/postgresql/data # ✅ 将数据库数据持久化到卷（容器删了数据还在）
+    healthcheck:                         # 健康检查：确保数据库启动完毕后才让 app 启动
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s                    # 每 5s 检查一次
-      timeout: 3s                     # 超过 3s 视为失败
-      retries: 20                     # 失败重试 20 次（最多等待 ~100 秒）
+      interval: 5s                       # 每 5 秒检测一次
+      timeout: 3s                        # 超过 3 秒视为失败
+      retries: 20                        # 最多重试 20 次（即最多等待约 100 秒）
+    networks:
+      - webnet                           # 让 db 加入 webnet 网络，供 app 容器访问
 
-  app:                               # 应用服务（FastAPI）
-    image: clarenceze/fullstack-mvp:latest      # ✅ 明确指定镜像名，与 DockerHub 一致 
-    build: ./app                     # 从 ./app/Dockerfile 构建镜像（定义运行环境与依赖）
-    container_name: app
+  # =======================================================
+  # ② 应用服务 (FastAPI)
+  # =======================================================
+  app:
+    image: clarenceze/fullstack-mvp:latest   # ✅ 明确指定镜像名（与 DockerHub 一致）
+    build: ./app                             # 从 ./app/Dockerfile 构建镜像（定义运行环境）
+    container_name: app                      # 容器名称
+    restart: always                          # 若异常退出自动重启
     environment:
-      DATABASE_URL: ${DATABASE_URL}  # 应用读这个连接串连接到上面的 db 服务
-      APP_PORT: ${APP_PORT}          # 应用监听的端口（uvicorn 用）
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY} 
-    depends_on:                      # 启动顺序依赖：等 db 健康检查通过再启 app
+      DATABASE_URL: ${DATABASE_URL}          # FastAPI 使用的数据库连接字符串
+      APP_PORT: ${APP_PORT}                  # 应用监听端口
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}      # 你自己的 Google API Key（用于 Gemini）
+      VIRTUAL_HOST: api.clarenceze.com       # ✅ 告诉 nginx-proxy 要反代的域名
+      LETSENCRYPT_HOST: api.clarenceze.com   # ✅ 告诉 acme-companion 要签发证书的域名
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL} # ✅ Let’s Encrypt 注册邮箱（用于到期提醒）
+    depends_on:                              # 启动依赖：等数据库健康检查通过再启动 app
       db:
         condition: service_healthy
+    expose:                                  # 向网络内公开端口（仅 webnet 内部可访问）
+      - "8000"
     volumes:
-      - ./app:/app                   # 绑定挂载应用源码（开发期方便热更新/改代码即生效）
-      - ./data:/app/data:ro          # 只读挂载 CSV 数据目录（供 init_db.py 导入）
-      - ./web:/app/web:ro            # 前端静态页目录（步骤三会用）
-    ports:
-      - "8000:8000"                  # 把宿主机 8000 暴露到容器 8000（浏览器访问 http://IP:8000）
+      - ./app:/app                           # 绑定代码目录（开发期热更新）
+      - ./data:/app/data:ro                  # 挂载数据目录（只读）
+      - ./web:/app/web:ro                    # 挂载静态文件目录（只读）
+    networks:
+      - webnet                               # 加入 webnet 网络供 nginx 访问
 
+  # =======================================================
+  # ③ Nginx 反向代理容器 (nginx-proxy)
+  # =======================================================
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:latest     # 官方自动反代镜像
+    container_name: nginx-proxy
+    restart: always
+    ports:
+      - "80:80"                              # 监听 HTTP
+      - "443:443"                            # 监听 HTTPS
+    volumes:
+      - ./certs:/etc/nginx/certs             # ✅ SSL 证书存放位置（共享卷）
+      - ./vhost:/etc/nginx/vhost.d           # ✅ 自动生成的虚拟主机配置
+      - ./html:/usr/share/nginx/html         # ✅ 临时目录，用于 Let’s Encrypt 域名验证
+      - /var/run/docker.sock:/tmp/docker.sock:ro  # ✅ 监听 Docker 事件（检测新容器）
+    networks:
+      - webnet                               # 加入 webnet，才能代理到 app
+
+  # =======================================================
+  # ④ Let’s Encrypt 自动签发与续签容器 (acme-companion)
+  # =======================================================
+  acme-companion:
+    image: nginxproxy/acme-companion:latest  # 官方 SSL 自动化配套镜像
+    container_name: acme-companion
+    restart: always
+    depends_on:
+      - nginx-proxy                          # 启动顺序：等 nginx-proxy 启动后再启
+    volumes_from:
+      - nginx-proxy                          # ✅ 共享 nginx-proxy 的挂载卷
+    volumes:
+      - ./certs:/etc/nginx/certs             # ✅ 证书文件写入位置
+      - ./acme:/etc/acme.sh                  # ✅ ACME 客户端账户与续签配置存放处
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # ✅ 监听新容器事件以自动签发证书
+    environment:
+      - DEFAULT_EMAIL=${LETSENCRYPT_EMAIL}   # 默认申请证书时使用的邮箱
+    networks:
+      - webnet                               # 与 nginx-proxy 共享同一网络
+
+# =======================================================
+# 网络配置
+# =======================================================
+networks:
+  webnet:                                   # 定义一个自定义网络
+    driver: bridge                          # ✅ 使用 Docker 默认桥接网络驱动
+                                            #   所有容器能通过“容器名”互相通信
+                                            #   例：app 访问 db 用 db:5432
+
+# =======================================================
+# 数据卷配置（持久化存储）
+# =======================================================
 volumes:
-  db_data: {}                        # 声明命名卷（给 db 服务持久化数据用）
-# ===== 结束 =====
+  db_data:                                  # ✅ 数据库数据持久化卷
+  certs:                                    # ✅ SSL 证书卷（nginx-proxy 与 acme 共享）
+  vhost:                                    # ✅ 动态生成的 Nginx 反代配置
+  html:                                     # ✅ Let’s Encrypt 域名验证临时目录
+  acme:                                     # ✅ ACME 客户端账户信息与续签记录
