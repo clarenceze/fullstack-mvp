@@ -28,12 +28,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo "✅ 开始自动部署 fullstack-mvp 全栈容器 ..."
-            cd /root/fullstack-mvp
+            cd /root/fullstack-mvp/deploy/prod
 
             echo "🧹 清理旧容器..."
             docker compose down
 
-            echo "⬇️ 拉取最新镜像（app / db / nginx-proxy / acme）..."
+            echo "⬇️ 拉取最新镜像..."
             docker compose pull
 
             echo "🧱 启动完整容器集群..."
@@ -52,15 +52,15 @@ jobs:
             echo "🩺 检查服务健康状态..."
             sleep 10
 
-            if ! docker ps --filter "name=app" --format '{{.Names}}' | grep -q "app"; then
+            if ! docker ps --filter "name=prod_app" --format '{{.Names}}' | grep -q "prod_app"; then
               echo "❌ 应用容器未运行！可能启动失败"
               docker ps -a
-              docker logs app || true
+              docker logs prod_app || true
               exit 1
             fi
 
             echo "📜 最近容器日志（30 行）:"
-            docker logs app | tail -n 30
+            docker logs prod_app | tail -n 30
 
             STATUS_CODE=$(curl -k -s -o response.txt -w "%{http_code}" --connect-timeout 8 https://api.clarenceze.com/api/health || echo 000)
             echo "📡 HTTP 状态码: $STATUS_CODE"
@@ -83,6 +83,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo "⚠️ 健康检查失败，开始执行基于 Docker Hub 的远程回滚 ..."
+            cd /root/fullstack-mvp/deploy/prod
 
             TOKEN=$(curl -s -H "Content-Type: application/json" \
               -X POST -d '{"username": "${{ secrets.DOCKER_USERNAME }}", "password": "${{ secrets.DOCKER_PASSWORD }}"}' \
