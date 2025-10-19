@@ -83,6 +83,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - DEFAULT_EMAIL=${LETSENCRYPT_EMAIL}
+      - NGINX_PROXY_CONTAINER=prod_nginx 
       - TZ=Asia/Taipei
     networks:
       - prod_net
