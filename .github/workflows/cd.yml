@@ -1,4 +1,4 @@
-name: CD - Deploy to ECS Server
+name: CD - Deploy Fullstack Containers to ECS Server
 
 on:
   workflow_run:
@@ -20,20 +20,29 @@ jobs:
        github.event.workflow_run.head_branch == 'main')
 
     steps:
-      - name: 🚀 部署至生产服务器
+      - name: 🚀 全栈自动部署到 ECS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "✅ 开始自动部署 fullstack-mvp ..."
+            echo "✅ 开始自动部署 fullstack-mvp 全栈容器 ..."
             cd /root/fullstack-mvp
-            docker compose pull app
-            docker compose up -d --force-recreate app
+
+            echo "🧹 清理旧容器..."
+            docker compose down
+
+            echo "⬇️ 拉取最新镜像（app / db / nginx-proxy / acme）..."
+            docker compose pull
+
+            echo "🧱 启动完整容器集群..."
+            docker compose up -d
+
+            echo "🧼 清理无用镜像..."
             docker image prune -f
 
-      - name: 🩺 健康检查（带错误日志）
+      - name: 🩺 健康检查（HTTPS）
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -43,7 +52,6 @@ jobs:
             echo "🩺 检查服务健康状态..."
             sleep 10
 
-            # 1️⃣ 检查容器是否正在运行
             if ! docker ps --filter "name=app" --format '{{.Names}}' | grep -q "app"; then
               echo "❌ 应用容器未运行！可能启动失败"
               docker ps -a
@@ -51,31 +59,22 @@ jobs:
               exit 1
             fi
 
-            # 2️⃣ 检查容器日志中是否有明显错误
             echo "📜 最近容器日志（30 行）:"
             docker logs app | tail -n 30
 
-            # 3️⃣ 访问 /health 并捕获状态码与返回内容
             STATUS_CODE=$(curl -k -s -o response.txt -w "%{http_code}" --connect-timeout 8 https://api.clarenceze.com/api/health || echo 000)
             echo "📡 HTTP 状态码: $STATUS_CODE"
             echo "📦 返回内容:"
             cat response.txt || true
 
-            # 4️⃣ 判断健康状况
             if [ "$STATUS_CODE" -eq 200 ]; then
               echo "✅ 健康检查通过"
             else
               echo "❌ 健康检查失败，状态码: $STATUS_CODE"
-              echo "🧠 可能原因："
-              echo "  - 应用未监听 8000 端口"
-              echo "  - /health 路由报错或未注册"
-              echo "  - 环境变量错误或依赖加载失败"
-              echo "  - Docker Compose 未正确启动"
               exit 1
             fi
 
-
-      - name: 🔁 自动回滚（若健康检查失败）
+      - name: 🔁 自动回滚（仅当健康检查失败时触发）
         if: failure()
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -85,12 +84,10 @@ jobs:
           script: |
             echo "⚠️ 健康检查失败，开始执行基于 Docker Hub 的远程回滚 ..."
 
-            # 1️⃣ 登录 Docker Hub 并获取 token
             TOKEN=$(curl -s -H "Content-Type: application/json" \
               -X POST -d '{"username": "${{ secrets.DOCKER_USERNAME }}", "password": "${{ secrets.DOCKER_PASSWORD }}"}' \
               https://hub.docker.com/v2/users/login/ | jq -r .token)
 
-            # 2️⃣ 从 Docker Hub 获取最近两个版本 tag（排除 latest）
             TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
               https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/?page_size=10 \
               | jq -r '.results[].name' | grep -v latest | head -n 2)
@@ -101,7 +98,6 @@ jobs:
             echo "🧾 当前失败版本(云端): $CURRENT_TAG"
             echo "🧾 上一个稳定版本(云端): $PREV_TAG"
 
-            # 3️⃣ 回滚到上一个版本
             if [ -n "$PREV_TAG" ]; then
               echo "🔄 回滚中..."
               docker pull clarenceze/fullstack-mvp:$PREV_TAG
@@ -109,21 +105,6 @@ jobs:
               docker compose up -d --force-recreate app
               echo "✅ 已回滚至 clarenceze/fullstack-mvp:$PREV_TAG"
             else
-              echo "⚠️ 云端未找到旧版本，可能是首次部署，跳过回滚"
+              echo "⚠️ 云端未找到旧版本，跳过回滚"
               exit 0
             fi
-
-            # 4️⃣ 删除云端错误镜像 tag
-            if [ -n "$CURRENT_TAG" ]; then
-              echo "🧹 删除 Docker Hub 上的错误镜像 tag: $CURRENT_TAG ..."
-              curl -s -X DELETE -H "Authorization: JWT $TOKEN" \
-                https://hub.docker.com/v2/repositories/clarenceze/fullstack-mvp/tags/$CURRENT_TAG/ || true
-              echo "✅ 已删除错误镜像：$CURRENT_TAG"
-            fi
-
-            # 5️⃣ 重新推送旧镜像为 latest
-            echo "🔁 更新 latest 指向旧版本 $PREV_TAG ..."
-            docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
-            docker push clarenceze/fullstack-mvp:latest
-            echo "🎯 回滚完成：latest 已更新为稳定版本 $PREV_TAG"
-
