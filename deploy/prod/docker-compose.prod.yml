@@ -1,6 +1,9 @@
 version: "3.9"
 
 services:
+  # =======================================================
+  # ① 数据库服务 (PostgreSQL)
+  # =======================================================
   db:
     image: postgres:16
     container_name: prod_db
@@ -30,6 +33,9 @@ services:
     networks:
       - prod_net
 
+  # =======================================================
+  # ② 应用服务 (FastAPI)
+  # =======================================================
   app:
     image: clarenceze/fullstack-mvp:latest
     container_name: prod_app
@@ -47,6 +53,7 @@ services:
         condition: service_healthy
     expose:
       - "8000"
+    # 🚫 生产环境不映射源代码（防止热更新影响稳定性）
     # volumes:
     #   - ./app:/app
     #   - ./data:/app/data:ro
@@ -54,6 +61,9 @@ services:
     networks:
       - prod_net
 
+  # =======================================================
+  # ③ Nginx 反向代理容器 (nginx-proxy)
+  # =======================================================
   nginx-proxy:
     image: nginxproxy/nginx-proxy:latest
     container_name: prod_nginx
@@ -61,36 +71,47 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    labels:
+      - "com.github.nginx-proxy.nginx"       # ✅ 标记主 nginx 容器（供 acme-companion 自动识别）
     volumes:
-      - ./deploy/prod/certs:/etc/nginx/certs
-      - ./deploy/prod/vhost:/etc/nginx/vhost.d
-      - ./deploy/prod/html:/usr/share/nginx/html
-      - ./deploy/prod/logs:/var/log/nginx
+      - ./certs:/etc/nginx/certs             # ✅ 已修正路径
+      - ./vhost:/etc/nginx/vhost.d           # ✅ 已修正路径
+      - ./html:/usr/share/nginx/html         # ✅ 已修正路径
+      - ./logs:/var/log/nginx                # ✅ 已修正路径
       - /var/run/docker.sock:/tmp/docker.sock:ro
     networks:
       - prod_net
 
+  # =======================================================
+  # ④ Let’s Encrypt 自动签发与续签容器 (acme-companion)
+  # =======================================================
   acme-companion:
     image: nginxproxy/acme-companion:latest
     container_name: prod_ssl
     restart: always
     depends_on:
       - nginx-proxy
-    volumes:
-      - ./deploy/prod/certs:/etc/nginx/certs
-      - ./deploy/prod/vhost:/etc/nginx/vhost.d
-      - ./deploy/prod/html:/usr/share/nginx/html
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - DEFAULT_EMAIL=${LETSENCRYPT_EMAIL}
-      - NGINX_PROXY_CONTAINER=prod_nginx 
-      - TZ=Asia/Taipei
+      DEFAULT_EMAIL: ${LETSENCRYPT_EMAIL}
+      NGINX_PROXY_CONTAINER: prod_nginx       # ✅ 明确告知要连接哪个 nginx 容器
+      TZ: Asia/Taipei
+    volumes:
+      - ./certs:/etc/nginx/certs              # ✅ 已修正路径
+      - ./vhost:/etc/nginx/vhost.d            # ✅ 已修正路径
+      - ./html:/usr/share/nginx/html          # ✅ 已修正路径
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - prod_net
 
+# =======================================================
+# 网络配置
+# =======================================================
 networks:
   prod_net:
     driver: bridge
 
+# =======================================================
+# 数据卷配置
+# =======================================================
 volumes:
   prod_db_data:
