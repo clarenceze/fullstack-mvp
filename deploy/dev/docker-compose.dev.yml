@@ -1,0 +1,114 @@
+version: "3.9"
+
+services:
+  # =======================================================
+  # ① 数据库服务 (PostgreSQL - Dev)
+  # =======================================================
+  db:
+    image: postgres:16
+    container_name: dev_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      [
+        "postgres",
+        "-c","shared_buffers=64MB",        # 🔹 更轻量的内存参数（适合测试）
+        "-c","work_mem=2MB",
+        "-c","effective_cache_size=128MB",
+        "-c","maintenance_work_mem=32MB",
+        "-c","max_connections=15",
+        "-c","wal_buffers=2MB",
+        "-c","checkpoint_completion_target=0.7"
+      ]
+    volumes:
+      - dev_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - dev_net
+
+  # =======================================================
+  # ② 应用服务 (FastAPI - Dev)
+  # =======================================================
+  app:
+    build: ./app                       # ✅ 从本地源码构建（开发环境）
+    image: clarenceze/fullstack-mvp:dev
+    container_name: dev_app
+    restart: always
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      APP_PORT: ${APP_PORT}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      VIRTUAL_HOST: dev.clarenceze.com  # ✅ 开发环境子域
+      LETSENCRYPT_HOST: dev.clarenceze.com
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      TZ: Asia/Taipei
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    volumes:
+      - ./app:/app                      # ✅ 热加载代码
+      - ./data:/app/data:ro
+      - ./web:/app/web:ro
+    networks:
+      - dev_net
+
+  # =======================================================
+  # ③ Nginx 反向代理容器 (nginx-proxy - Dev)
+  # =======================================================
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:latest
+    container_name: dev_nginx
+    restart: always
+    ports:
+      - "8080:80"                       # ✅ 避免与 prod 冲突
+      - "8443:443"
+    volumes:
+      - ./deploy/dev/certs:/etc/nginx/certs
+      - ./deploy/dev/vhost:/etc/nginx/vhost.d
+      - ./deploy/dev/html:/usr/share/nginx/html
+      - ./deploy/dev/logs:/var/log/nginx
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - dev_net
+
+  # =======================================================
+  # ④ Let’s Encrypt 自动签发与续签容器 (acme-companion - Dev)
+  # =======================================================
+  acme-companion:
+    image: nginxproxy/acme-companion:latest
+    container_name: dev_ssl
+    restart: always
+    depends_on:
+      - nginx-proxy                     # ✅ 注意依赖 service 名
+    volumes:
+      - ./deploy/dev/certs:/etc/nginx/certs
+      - ./deploy/dev/vhost:/etc/nginx/vhost.d
+      - ./deploy/dev/html:/usr/share/nginx/html
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DEFAULT_EMAIL=${LETSENCRYPT_EMAIL}
+      - TZ=Asia/Taipei
+    networks:
+      - dev_net
+
+# =======================================================
+# 网络配置
+# =======================================================
+networks:
+  dev_net:
+    driver: bridge
+
+# =======================================================
+# 数据卷配置
+# =======================================================
+volumes:
+  dev_db_data:
