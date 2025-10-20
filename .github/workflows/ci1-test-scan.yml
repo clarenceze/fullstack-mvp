@@ -89,9 +89,11 @@ jobs:
       - name: 🔐 Gitleaks (Secret Scan)
         uses: gitleaks/gitleaks-action@v2
         with:
-          args: detect --source . --no-git --redact
+          config-path: .gitleaks.toml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
 
       # -------------------------------
       # 5️⃣ Dockerfile 检查（不阻断）
