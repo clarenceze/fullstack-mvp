@@ -34,10 +34,12 @@ services:
       - prod_net
 
   # =======================================================
-  # ② 应用服务 (FastAPI)
+  # ② 应用服务 (FastAPI，本地构建版本)
   # =======================================================
   app:
-    image: clarenceze/fullstack-mvp:latest
+    build:                                 # ✅ 改为本地构建
+      context: ../../app                      # ✅ Dockerfile 所在目录
+      dockerfile: Dockerfile               # ✅ 指定 Dockerfile
     container_name: prod_app
     restart: always
     depends_on:
@@ -53,10 +55,6 @@ services:
       TZ: Asia/Taipei
     expose:
       - "8000"
-
-    # ✅ 启动前自动执行数据库初始化脚本
-    #   - 若 CSV 已导入，会自动跳过
-    #   - 确保 PostgreSQL 启动并可连接
     command: >
       bash -c "
         echo '🔧 初始化数据库（若已存在则跳过）...' &&
@@ -78,18 +76,18 @@ services:
       - "80:80"
       - "443:443"
     labels:
-      - "com.github.nginx-proxy.nginx"       # ✅ 标记主 nginx 容器（供 acme-companion 自动识别）
+      - "com.github.nginx-proxy.nginx"
     volumes:
-      - ./certs:/etc/nginx/certs             # ✅ 已修正路径
-      - ./vhost:/etc/nginx/vhost.d           # ✅ 已修正路径
-      - ./html:/usr/share/nginx/html         # ✅ 已修正路径
-      - ./logs:/var/log/nginx                # ✅ 已修正路径
+      - ./certs:/etc/nginx/certs
+      - ./vhost:/etc/nginx/vhost.d
+      - ./html:/usr/share/nginx/html
+      - ./logs:/var/log/nginx
       - /var/run/docker.sock:/tmp/docker.sock:ro
     networks:
       - prod_net
 
   # =======================================================
-  # ④ Let’s Encrypt 自动签发与续签容器 (acme-companion)
+  # ④ Let's Encrypt 自动签发与续签容器 (acme-companion)
   # =======================================================
   acme-companion:
     image: nginxproxy/acme-companion:latest
@@ -99,12 +97,12 @@ services:
       - nginx-proxy
     environment:
       DEFAULT_EMAIL: ${LETSENCRYPT_EMAIL}
-      NGINX_PROXY_CONTAINER: prod_nginx       # ✅ 明确告知要连接哪个 nginx 容器
+      NGINX_PROXY_CONTAINER: prod_nginx
       TZ: Asia/Taipei
     volumes:
-      - ./certs:/etc/nginx/certs              # ✅ 已修正路径
-      - ./vhost:/etc/nginx/vhost.d            # ✅ 已修正路径
-      - ./html:/usr/share/nginx/html          # ✅ 已修正路径
+      - ./certs:/etc/nginx/certs
+      - ./vhost:/etc/nginx/vhost.d
+      - ./html:/usr/share/nginx/html
       - ./acme:/etc/acme.sh                   # ✅ 🔥 新增持久化账户目录（关键！）
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
