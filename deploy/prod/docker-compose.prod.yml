@@ -40,6 +40,9 @@ services:
     image: clarenceze/fullstack-mvp:latest
     container_name: prod_app
     restart: always
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       APP_PORT: ${APP_PORT}
@@ -48,16 +51,19 @@ services:
       LETSENCRYPT_HOST: api.clarenceze.com
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
       TZ: Asia/Taipei
-    depends_on:
-      db:
-        condition: service_healthy
     expose:
       - "8000"
-    # 🚫 生产环境不映射源代码（防止热更新影响稳定性）
-    # volumes:
-    #   - ./app:/app
-    #   - ./data:/app/data:ro
-    #   - ./web:/app/web:ro
+
+    # ✅ 启动前自动执行数据库初始化脚本
+    #   - 若 CSV 已导入，会自动跳过
+    #   - 确保 PostgreSQL 启动并可连接
+    command: >
+      bash -c "
+        echo '🔧 初始化数据库（若已存在则跳过）...' &&
+        python scripts/init_db.py || echo '⚠️ 数据初始化跳过（可能已存在或CSV缺失）' &&
+        echo '🚀 启动 FastAPI 服务...' &&
+        uvicorn main:app --host 0.0.0.0 --port 8000
+      "
     networks:
       - prod_net
 
