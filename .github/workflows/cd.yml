@@ -31,13 +31,13 @@ jobs:
             cd /root/fullstack-mvp/deploy/prod
 
             echo "🧹 清理旧容器..."
-            docker compose down
+            docker compose -f docker-compose.prod.yml --env-file .env.prod down
 
             echo "⬇️ 拉取最新镜像..."
-            docker compose pull
+            docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 
             echo "🧱 启动完整容器集群..."
-            docker compose up -d
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 
             echo "🧼 清理无用镜像..."
             docker image prune -f
