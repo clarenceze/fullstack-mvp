@@ -28,7 +28,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo "✅ 开始自动部署 fullstack-mvp 全栈容器 ..."
-            cd /root/fullstack-mvp/deploy/prod
+            cd /home/ubuntu/fullstack-mvp/deploy/prod
 
             echo "🧹 清理旧容器..."
             docker compose -f docker-compose.prod.yml --env-file .env.prod down
@@ -83,7 +83,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo "⚠️ 健康检查失败，开始执行基于 Docker Hub 的远程回滚 ..."
-            cd /root/fullstack-mvp/deploy/prod
+            cd /home/ubuntu/fullstack-mvp/deploy/prod
 
             TOKEN=$(curl -s -H "Content-Type: application/json" \
               -X POST -d '{"username": "${{ secrets.DOCKER_USERNAME }}", "password": "${{ secrets.DOCKER_PASSWORD }}"}' \
@@ -103,7 +103,7 @@ jobs:
               echo "🔄 回滚中..."
               docker pull clarenceze/fullstack-mvp:$PREV_TAG
               docker tag clarenceze/fullstack-mvp:$PREV_TAG clarenceze/fullstack-mvp:latest
-              docker compose up -d --force-recreate app
+              docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate app
               echo "✅ 已回滚至 clarenceze/fullstack-mvp:$PREV_TAG"
             else
               echo "⚠️ 云端未找到旧版本，跳过回滚"
