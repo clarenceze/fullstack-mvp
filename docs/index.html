@@ -13,6 +13,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<link rel="stylesheet" href="./static/css/style.css">
 	<link rel="stylesheet" href="./static/css/root.css">
+	<link rel="stylesheet" href="./static/css/query-tool.css">
 
 </head>
 
@@ -150,6 +151,48 @@
 
 
 			<content>
+				<div class="title query-tool-title">
+					<svg t="1705257422086" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1891">
+                        <path d="M629.333333 202.666667v213.333333h277.333334v448h-512v-213.333333h-277.333334v-448h512z m213.333334 277.333333h-213.333334v170.666667h-170.666666v149.333333h384v-320z m-277.333334-213.333333h-384v320h213.333334v-170.666667h170.666666v-149.333333z m0 213.333333h-106.666666v106.666667h106.666666v-106.666667z"  p-id="1892"></path>
+                    </svg>
+					資料查詢
+				</div>
+				<div class="query-tool query-tool-panel">
+					<p class="query-tool-intro">從 PostgreSQL 讀取銷量 Top 10，或以自然語言描述需求，由模型生成 SQL 並顯示結果。</p>
+					<div class="query-tool-actions">
+						<button type="button" id="loadData" class="query-tool-btn query-tool-btn-primary">載入 Top10</button>
+					</div>
+					<div class="query-tool-nl">
+						<div class="query-tool-nl-field">
+							<label class="query-tool-label" for="userQuery">自然語言查詢</label>
+							<input type="text" id="userQuery" class="query-tool-input" placeholder="例如：找出2015年後在PS4平台銷量最高的遊戲" autocomplete="off">
+						</div>
+						<button type="button" id="generateSQL" class="query-tool-btn query-tool-btn-primary">智能查詢</button>
+					</div>
+					<div id="queryToolStatus" class="query-tool-status" role="status" aria-live="polite" hidden></div>
+					<div id="llmResult" class="query-tool-llm" hidden>
+						<h3 class="query-tool-subheading">生成結果</h3>
+						<div class="query-tool-field">
+							<span class="query-tool-label-inline">SQL</span>
+							<pre id="sqlOutput" class="query-tool-pre"></pre>
+						</div>
+						<div class="query-tool-field">
+							<span class="query-tool-label-inline">解釋</span>
+							<pre id="descOutput" class="query-tool-pre query-tool-pre-desc"></pre>
+						</div>
+					</div>
+					<div class="query-tool-table-wrap">
+						<table id="gamesTable" class="query-tool-table" hidden>
+							<thead>
+								<tr>
+									<th>Name</th>
+									<th>Global Sales (millions)</th>
+								</tr>
+							</thead>
+							<tbody></tbody>
+						</table>
+					</div>
+				</div>
 				<div class="title"><svg t="1705257422086" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1891" >
                         <path d="M629.333333 202.666667v213.333333h277.333334v448h-512v-213.333333h-277.333334v-448h512z m213.333334 277.333333h-213.333334v170.666667h-170.666666v149.333333h384v-320z m-277.333334-213.333333h-384v320h213.333334v-170.666667h170.666666v-149.333333z m0 213.333333h-106.666666v106.666667h106.666666v-106.666667z"  p-id="1892"></path>
                     </svg>site </div>
@@ -260,11 +303,6 @@
 	</div>
 </body>
 <script src="./static/js/script.js"> </script>
-
-
-
-
-<script charset="UTF-8" id="LA_COLLECT" src="//sdk.51.la/js-sdk-pro.min.js"></script>
-<script>LA.init({ id: "KFqltKSkJgQTGD9l", ck: "KFqltKSkJgQTGD9l" })</script>
+<script src="./static/js/query-tool.js"></script>
 
 </html>
