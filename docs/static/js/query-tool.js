@@ -14,8 +14,8 @@
 
 	if (!loadBtn || !genBtn || !gamesTable || !statusEl) return;
 
-	const loadLabel = "載入 Top10";
-	const genLabel = "智能查詢";
+	const loadLabel = "Load Top 10";
+	const genLabel = "Run query";
 
 	function setStatus(msg, isError) {
 		if (!msg) {
@@ -32,11 +32,11 @@
 	function setLoading(loading, which) {
 		if (which === "load" || which === "both") {
 			loadBtn.disabled = loading;
-			loadBtn.textContent = loading ? "載入中…" : loadLabel;
+			loadBtn.textContent = loading ? "Loading…" : loadLabel;
 		}
 		if (which === "llm" || which === "both") {
 			genBtn.disabled = loading;
-			genBtn.textContent = loading ? "查詢中…" : genLabel;
+			genBtn.textContent = loading ? "Querying…" : genLabel;
 		}
 	}
 
@@ -52,15 +52,15 @@
 					}).join("; ");
 			}
 		} catch (_) {}
-		return text || response.statusText || "請求失敗";
+		return text || response.statusText || "Request failed";
 	}
 
-	/** 瀏覽器對 CORS / 離線只給 TypeError: Failed to fetch */
+	/** Browsers often surface CORS / offline as TypeError: Failed to fetch */
 	function formatFetchError(err, prefix) {
 		var m = err && err.message ? err.message : String(err);
 		if (/failed to fetch|networkerror|load failed/i.test(m)) {
 			m +=
-				"（多為跨域：後端需在 CORS 允許當前網址來源，例如本機 http://localhost:埠；更新後需重新部署 API）";
+				" (often CORS: allow this origin on the API, e.g. http://localhost:<port>; redeploy after changes.)";
 		}
 		return prefix ? prefix + m : m;
 	}
@@ -143,7 +143,7 @@
 			const data = await response.json();
 			if (!Array.isArray(data)) {
 				if (data && data.error) throw new Error(String(data.error));
-				throw new Error("回傳格式不正確");
+				throw new Error("Invalid response format");
 			}
 			if (llmResult) llmResult.hidden = true;
 			renderTop10(data);
@@ -157,7 +157,7 @@
 	genBtn.addEventListener("click", async function () {
 		const question = userQuery ? userQuery.value.trim() : "";
 		if (!question) {
-			setStatus("請先輸入你的問題。", true);
+			setStatus("Enter a question first.", true);
 			return;
 		}
 
@@ -174,8 +174,8 @@
 
 			if (llmResult && sqlOutput && descOutput) {
 				llmResult.hidden = false;
-				sqlOutput.textContent = data.sql || "⚠️ 未生成 SQL";
-				descOutput.textContent = data.desc || "⚠️ 模型未提供解釋";
+				sqlOutput.textContent = data.sql || "⚠️ No SQL returned";
+				descOutput.textContent = data.desc || "⚠️ No explanation from model";
 			}
 
 			const tbody = gamesTable.querySelector("tbody");
@@ -189,7 +189,7 @@
 				gamesTable.hidden = true;
 			}
 		} catch (err) {
-			setStatus(formatFetchError(err, "智能查詢失敗："), true);
+			setStatus(formatFetchError(err, "Query failed: "), true);
 		} finally {
 			setLoading(false, "llm");
 		}
