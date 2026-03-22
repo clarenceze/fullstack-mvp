@@ -37,10 +37,19 @@ logger = setup_logger("main")
 app = FastAPI()
 
 # === 配置 CORS，让浏览器允许跨域访问 ===
+# 注意：瀏覽器會帶 Origin（含埠號），本機用 file:// / http://localhost:PORT 預覽時
+# 若未列入，fetch 會失敗且只看到 Failed to fetch（網路面板可見 CORS 阻擋）。
 origins = [
-    "https://clarenceze.com",       # 你的 GitHub Pages 域名
-    "https://www.clarenceze.com",   # 兼容带 www 的情况
-    "https://clarenceze.github.io"
+    "https://clarenceze.com",
+    "https://www.clarenceze.com",
+    "https://clarenceze.github.io",
+    # 本機預覽（python -m http.server、VS Code Live Server 等）
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 app.add_middleware(
