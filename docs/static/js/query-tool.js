@@ -55,6 +55,16 @@
 		return text || response.statusText || "請求失敗";
 	}
 
+	/** 瀏覽器對 CORS / 離線只給 TypeError: Failed to fetch */
+	function formatFetchError(err, prefix) {
+		var m = err && err.message ? err.message : String(err);
+		if (/failed to fetch|networkerror|load failed/i.test(m)) {
+			m +=
+				"（多為跨域：後端需在 CORS 允許當前網址來源，例如本機 http://localhost:埠；更新後需重新部署 API）";
+		}
+		return prefix ? prefix + m : m;
+	}
+
 	function setCellText(td, value) {
 		td.textContent = value == null ? "" : String(value);
 	}
@@ -138,7 +148,7 @@
 			if (llmResult) llmResult.hidden = true;
 			renderTop10(data);
 		} catch (err) {
-			setStatus(err.message || String(err), true);
+			setStatus(formatFetchError(err), true);
 		} finally {
 			setLoading(false, "load");
 		}
@@ -179,7 +189,7 @@
 				gamesTable.hidden = true;
 			}
 		} catch (err) {
-			setStatus("智能查詢失敗：" + (err.message || String(err)), true);
+			setStatus(formatFetchError(err, "智能查詢失敗："), true);
 		} finally {
 			setLoading(false, "llm");
 		}
