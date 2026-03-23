@@ -1,0 +1,292 @@
+/* =========================================
+   Assistant Status Widget
+   右下角悬浮状态面板
+   ========================================= */
+
+/* 主容器 */
+#assistant-status {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 280px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+/* 收起状态 */
+#assistant-status.collapsed {
+  width: 60px;
+  height: 60px;
+  cursor: pointer;
+}
+
+#assistant-status.collapsed .status-content,
+#assistant-status.collapsed .status-header .status-text {
+  display: none;
+}
+
+#assistant-status.collapsed .status-header {
+  justify-content: center;
+  padding: 0;
+}
+
+#assistant-status.collapsed .status-icon {
+  font-size: 32px;
+  margin: 0;
+}
+
+/* 头部 */
+.status-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.status-header:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.status-icon {
+  font-size: 24px;
+  margin-right: 10px;
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.status-toggle {
+  font-size: 18px;
+  opacity: 0.7;
+  transition: transform 0.3s ease;
+}
+
+#assistant-status.collapsed .status-toggle {
+  transform: rotate(180deg);
+}
+
+/* 内容区 */
+.status-content {
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* 状态指示器 */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 10px;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.working { background: #10b981; }
+.status-dot.idle { background: #f59e0b; }
+.status-dot.offline { background: #6b7280; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-label {
+  font-size: 13px;
+  color: #374151;
+  flex: 1;
+}
+
+/* 任务列表 */
+.task-list {
+  margin-top: 12px;
+}
+
+.task-item {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  transition: transform 0.2s ease;
+}
+
+.task-item:hover {
+  transform: translateX(3px);
+}
+
+.task-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.task-icon {
+  margin-right: 6px;
+}
+
+/* 进度条 */
+.task-progress {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.task-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.task-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.task-percent {
+  font-size: 11px;
+  color: #6b7280;
+  text-align: right;
+  margin-bottom: 4px;
+}
+
+.task-message {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* 统计信息 */
+.status-stats {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* 滚动条样式 */
+.status-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.status-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.status-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.status-content::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  #assistant-status {
+    bottom: 10px;
+    right: 10px;
+    width: 260px;
+  }
+}
+
+/* 暗黑模式支持 */
+@media (prefers-color-scheme: dark) {
+  #assistant-status {
+    background: rgba(30, 30, 30, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .status-content {
+    color: #f3f4f6;
+  }
+
+  .status-indicator,
+  .task-item {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .status-label,
+  .task-name {
+    color: #f3f4f6;
+  }
+
+  .task-message,
+  .task-percent {
+    color: #9ca3af;
+  }
+
+  .status-stats {
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+}
