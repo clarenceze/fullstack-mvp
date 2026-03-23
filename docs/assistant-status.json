@@ -1,0 +1,23 @@
+{
+  "status": "working",
+  "updated_at": "2026-03-23T16:00:00+08:00",
+  "tasks": [
+    {
+      "name": "网站状态面板开发",
+      "progress": 100,
+      "message": "前端代码完成，已提交 PR！",
+      "status": "completed"
+    },
+    {
+      "name": "iCloud 集成",
+      "progress": 75,
+      "message": "网络库已修复，待认证完成",
+      "status": "in_progress"
+    }
+  ],
+  "stats": {
+    "tasksCompleted": 1,
+    "totalMessages": 50,
+    "uptime": "3.5h"
+  }
+}
