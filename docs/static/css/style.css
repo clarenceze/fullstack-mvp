@@ -637,8 +637,9 @@ footer {
 }
 
 @media (max-width: 800px) {
-    /* 不在这里隐藏 zyyo-left，由 mobile-profile.css 控制布局 */
-    /* .zyyo-left { display: none; } */
+    .zyyo-left {
+        display: none;
+    }
 
     .a .projectItemRight {
         display: none;
